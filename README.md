@@ -76,9 +76,9 @@ backgrounds instead of detecting manipulation.
 
 **Dropped videos.** A Celeb-DF fake shows two people. If one of them is in
 train and the other in val, the fake would put a person on both sides whichever
-split it went to, so it is dropped. With 10% of people in val this removes
-roughly 18% of the non-test fakes. Real videos are never dropped. `build_index`
-prints the exact number.
+split it went to, so it is dropped. With 10% of people in val (seed 0) this
+removes 1,072 of the 5,299 non-test fakes (20%). Real videos are never dropped.
+`build_index` prints the exact number.
 
 Both datasets have far more fake than real videos (FF++ 4:1, Celeb-DF about
 6:1), so training should use class weights or balanced sampling.

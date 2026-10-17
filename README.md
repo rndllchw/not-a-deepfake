@@ -24,6 +24,29 @@ kept for in-domain results (Celeb-DF: the official 518-video test list).
 inference time.
 
 
+## Setup
+
+### GPU machine
+
+The GPU machine runs Ronin's Deep Learning GPU (PyTorch) image, which already
+has PyTorch installed in `/opt/pytorch`, matched to the GPU driver. Install the
+other packages into that environment instead of making a new `.venv`. A new
+venv would download its own `torch`, which may not match the driver.
+
+```
+git clone https://github.com/rndllchw/not-a-deepfake.git
+cd not-a-deepfake
+source /opt/pytorch/bin/activate
+pip install -r requirements.txt     # skips torch/torchvision, which are already installed
+```
+
+So on this machine, the line to run at the start of every session is
+`source /opt/pytorch/bin/activate`, not `source .venv/bin/activate`.
+
+If `git clone` asks for a password, log in with `gh auth login` or a GitHub
+personal access token typed at the prompt. Never save a token in the repo.
+
+
 ## Data
 
 Datasets are **not** stored in this repository. The FaceForensics++ terms of use
@@ -104,3 +127,55 @@ python -m src.data.build_index --data-root ~/data   # writes ~/data/processed/in
 
 Read it with `pd.read_csv(path, dtype={"source_ids": str})` so IDs such as
 `000` keep their leading zeros.
+
+### Face crops
+
+Deepfakes only change the face, and the backbones take 224–380 px inputs, so
+every model trains on face crops rather than whole frames. Extract them once on
+the GPU machine after building the index (in tmux):
+
+```
+python -m src.data.extract_faces --data-root ~/data --limit 20   # quick test, prints s/video
+python -m src.data.extract_faces --data-root ~/data              # everything
+```
+
+- **Frames:** 2 windows of 32 consecutive frames per video, one in the middle
+  of each half (`--windows`, `--window-len`). The temporal models use the
+  windows; the frame models use the same crops. Videos shorter than two
+  windows get one.
+- **Faces:** detected with RetinaFace (ResNet-50, via `batch-face`), a whole
+  window at a time, on frames shrunk to 960 px; crops come from the full frame.
+  Each window starts with the largest face and follows it frame to frame, so a
+  window stays on one person; different windows may pick different people.
+- **Landmarks:** RetinaFace's 5 points (eyes, nose, mouth corners) go in the
+  CSV. The standard 68 points (FAN, via `face-alignment`; needed for
+  Self-Blended Images masks) go in `landmarks68.npy` next to the crops.
+- **Crops:** square, 1.3× the face box (`--margin 0.3`), resized to 380 px
+  (`--size`), JPEG quality 95. Parts outside the frame are black. Resize per
+  backbone when loading (Xception 299, EfficientNet-B4 380, ViT/CLIP 224).
+- **Resumable:** each video's `faces.csv` is written last; videos that have one
+  are skipped, so the job can be stopped with Ctrl+C and rerun. Videos that
+  fail are reported and retried on the next run.
+- **GPU:** `--workers` processes (default 4) decode videos on the CPU, and each
+  loads its own copy of the models on the GPU. Lower it if the GPU runs out of
+  memory; raise it if the GPU sits idle and there are spare CPUs.
+  `--device cpu` works for testing but is slow (~40 s/video).
+
+Output in `~/data/faces/<video_id>/`: one `<frame>.jpg` per frame with a face,
+`faces.csv`, and `landmarks68.npy`. All videos' rows are also merged into
+`~/data/processed/faces.csv`, one row per extracted frame:
+
+| Column | Meaning |
+|---|---|
+| `video_id`, `dataset`, `method`, `label`, `split` | As in the index |
+| `window`, `frame` | Window number in the video (0, 1) and frame number in the video |
+| `crop` | Crop path relative to `~/data/faces/`; empty if no face was found in that frame |
+| `score` | RetinaFace face confidence |
+| `crop_x`, `crop_y`, `crop_side` | Where the crop sits in the original frame (pixels) |
+| `right_eye_x` … `mouth_left_y` | 5 face landmarks in crop pixels (the person's right eye first) |
+| `lm68_score` | Mean confidence of the 68 landmarks (0–1) |
+
+`landmarks68.npy` has shape `(rows, 68, 2)`: the 68 points (iBUG order: jaw
+0–16, brows 17–26, nose 27–35, eyes 36–47, mouth 48–67) in crop pixels, one
+entry per row of that video's `faces.csv`, in the same order; NaN where no face
+was found.

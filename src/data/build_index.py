@@ -50,7 +50,7 @@ def load_ffpp_splits(splits_dir: Path) -> dict[str, str]:
         # e.g. [["071", "054"], ["087", "081"], ...]
         for a, b in pairs:
             for key in (a, b, f"{a}_{b}", f"{b}_{a}"):
-            # iterate over all 4 permutable video names
+            # Iterate over all 4 permutable video names
                 if id_to_split.get(key, split) != split:
                     raise ValueError(f"{key} appears in both {id_to_split[key]} and {split}")
                 id_to_split[key] = split
@@ -96,9 +96,11 @@ def index_celebdf(celebdf_root: Path, val_frac: float, seed: int) -> pd.DataFram
     test_videos = set()
     for line in (celebdf_root / "List_of_testing_videos.txt").read_text().splitlines():
         if line.strip():
-            test_videos.add(line.split()[1])  # e.g. "1 YouTube-real/00170.mp4"
+            test_videos.add(line.split()[1])
+            # e.g. "1 YouTube-real/00170.mp4"
 
     rows = []
+    # Split test first
     for folder in CELEBDF_FOLDERS:
         for path in sorted(require_videos(celebdf_root / folder)):
             rel = f"{folder}/{path.name}"
@@ -109,6 +111,7 @@ def index_celebdf(celebdf_root: Path, val_frac: float, seed: int) -> pd.DataFram
                              path=str(path)))
     df = pd.DataFrame(rows)
 
+    # Then handle train and val
     n_test = (df["split"] == "test").sum()
     if n_test != len(test_videos):
         print(f"[celebdf] warning: {len(test_videos) - n_test} videos in the test list are missing on disk")
@@ -155,7 +158,7 @@ def main() -> None:
     parser.add_argument("--data-root", type=Path, default=Path("~/data").expanduser())
     parser.add_argument("--splits-dir", type=Path, default=REPO_ROOT / "splits" / "ffpp")
     parser.add_argument("--compression", default="c23")
-    parser.add_argument("--celebdf-val-frac", type=float, default=0.1,
+    parser.add_argument("--celebdf-val-frac", type=float, default=0.2,
                         help="share of Celeb-DF people (outside the test list) used for val")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", type=Path, default=None,

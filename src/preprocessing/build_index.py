@@ -11,6 +11,7 @@ Expected layout from official download scripts:
     {data_root}/raw/ffpp/manipulated_sequences/<Method>/c23/videos/000_003.mp4
     {data_root}/raw/celebdf/{Celeb-real,Celeb-synthesis,YouTube-real}/*.mp4
     {data_root}/raw/celebdf/List_of_testing_videos.txt
+    {data_root}/raw/dfdc/**/*.mp4, labelled by metadata.json or labels.csv files (see index_dfdc)
 
 FF++ split files (train/val/test.json from the FaceForensics GitHub repo) are
 lists of video id pairs whose face swaps belong together, and live in this repo
@@ -18,6 +19,10 @@ under splits/ffpp/.
 
 Celeb-DF: the official test list is the test split; the other videos are split
 by person into train and val (see index_celebdf).
+
+DFDC: every video is test. Models train on FF++ and Celeb-DF only, so DFDC
+measures how well they work on a dataset they have never seen. Skipped if
+{data_root}/raw/dfdc does not exist.
 """
 
 import argparse
@@ -39,6 +44,14 @@ def require_videos(folder: Path) -> list[Path]:
     videos = list(folder.glob("*.mp4"))
     if not videos:
         raise FileNotFoundError(f"no .mp4 files in {folder}; check --data-root and --compression")
+    return videos
+
+
+def require_videos_recursive(folder: Path) -> list[Path]:
+    """All .mp4 files anywhere under a folder; fails clearly if there are none."""
+    videos = list(folder.rglob("*.mp4"))
+    if not videos:
+        raise FileNotFoundError(f"no .mp4 files under {folder}")
     return videos
 
 
@@ -144,6 +157,47 @@ def index_celebdf(celebdf_root: Path, val_frac: float, seed: int) -> pd.DataFram
     return df[~dropped]
 
 
+def dfdc_labels(dfdc_root: Path) -> dict[str, tuple[int, str]]:
+    """Label (1 = fake) and source video of each DFDC file name, from every label file under dfdc_root:
+        metadata.json  (Kaggle sample and full training release):
+                       {"abc.mp4": {"label": "FAKE", "original": "xyz.mp4", ...}, ...}
+        labels.csv     (public test set): filename,label with 1 = fake; no source video
+    Other CSVs (e.g. Kaggle's sample_submission.csv, all 0.5) are not labels and are ignored."""
+    labels = {}
+    for path in dfdc_root.rglob("metadata.json"):
+        for name, info in json.loads(path.read_text()).items():
+            labels[name] = (int(info["label"] == "FAKE"), info.get("original") or name)
+    for path in dfdc_root.rglob("labels.csv"):
+        for name, label in pd.read_csv(path)[["filename", "label"]].itertuples(index=False):
+            labels[name] = (int(label), name)
+    return labels
+
+
+def index_dfdc(dfdc_root: Path) -> pd.DataFrame:
+    """Every labelled DFDC video, all in the test split. source_ids is the real video a
+    fake was made from (its own name for real videos), so a fake and its source share it."""
+    labels = dfdc_labels(dfdc_root)
+    rows, unlabelled = [], []
+    for path in sorted(require_videos_recursive(dfdc_root)):
+        if path.name not in labels:
+            unlabelled.append(path.name)
+            continue
+        label, original = labels[path.name]
+        method = "fake" if label else "real"
+        rows.append(dict(video_id=f"dfdc/{method}/{path.stem}", dataset="dfdc", method=method,
+                         label=label, split="test", source_ids=Path(original).stem, path=str(path)))
+    if unlabelled:
+        print(f"[dfdc] warning: {len(unlabelled)} videos have no label and are left out, "
+              f"e.g. {unlabelled[:3]}")
+    df = pd.DataFrame(rows)
+    if df.empty:
+        raise FileNotFoundError(f"no labelled DFDC videos in {dfdc_root}; expected metadata.json or labels.csv")
+    if df["video_id"].duplicated().any():
+        raise ValueError(f"[dfdc] duplicate file names, e.g. {df.loc[df['video_id'].duplicated(), 'path'].iloc[0]}")
+    print(f"[dfdc] {(df['label'] == 0).sum()} real and {(df['label'] == 1).sum()} fake videos, all test")
+    return df
+
+
 def check_no_identity_leak(df: pd.DataFrame) -> None:
     """Every person (an id in source_ids) must belong to exactly one split."""
     ids = df.assign(identity=df["source_ids"].str.split("_")).explode("identity")
@@ -173,7 +227,13 @@ def main() -> None:
     celebdf = index_celebdf(data_root / "raw" / "celebdf", args.celebdf_val_frac, args.seed)
     # Official test videos share people with the rest, so only train vs val is checked.
     check_no_identity_leak(celebdf[celebdf["split"] != "test"])
-    index = pd.concat([ffpp, celebdf], ignore_index=True)
+    parts = [ffpp, celebdf]
+    dfdc_root = data_root / "raw" / "dfdc"
+    if dfdc_root.exists():
+        parts.append(index_dfdc(dfdc_root))
+    else:
+        print(f"[dfdc] {dfdc_root} not found, skipped")
+    index = pd.concat(parts, ignore_index=True)
     # video_id, dataset, method, label, split, source_ids, path 
 
     missing = ~index["path"].map(lambda p: Path(p).exists())

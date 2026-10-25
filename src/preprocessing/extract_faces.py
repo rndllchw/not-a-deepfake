@@ -8,9 +8,9 @@ frame models train on the same crops. Faces are detected with RetinaFace
 through the window, and a square crop around it is saved.
 
 Run on the GPU machine from the repo root, after build_index, inside tmux:
-    python -m src.data.extract_faces --data-root ~/data
+    python -m src.preprocessing.extract_faces --data-root ~/data
 Quick test on a few random videos first:
-    python -m src.data.extract_faces --data-root ~/data --limit 20
+    python -m src.preprocessing.extract_faces --data-root ~/data --limit 20
 
 Writes:
     {data_root}/faces/<video_id>/<frame>.jpg  one crop per frame, e.g. faces/ffpp/real/000/00012.jpg

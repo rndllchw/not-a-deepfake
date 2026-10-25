@@ -112,7 +112,7 @@ Every later stage reads its list of videos from one index file, with one row
 per video. Build it on Ronin from the repo root:
 
 ```
-python -m src.data.build_index --data-root ~/data   # writes ~/data/processed/index.csv
+python -m src.preprocessing.build_index --data-root ~/data   # writes ~/data/processed/index.csv
 ```
 
 | Column | Type | Example values | Meaning |
@@ -135,8 +135,8 @@ every model trains on face crops rather than whole frames. Extract them once on
 the GPU machine after building the index (in tmux):
 
 ```
-python -m src.data.extract_faces --data-root ~/data --limit 20   # quick test, prints s/video
-python -m src.data.extract_faces --data-root ~/data              # everything
+python -m src.preprocessing.extract_faces --data-root ~/data --limit 20   # quick test, prints s/video
+python -m src.preprocessing.extract_faces --data-root ~/data              # everything
 ```
 
 - **Frames:** 2 windows of 32 consecutive frames per video, one in the middle
@@ -179,3 +179,85 @@ Output in `~/data/faces/<video_id>/`: one `<frame>.jpg` per frame with a face,
 0–16, brows 17–26, nose 27–35, eyes 36–47, mouth 48–67) in crop pixels, one
 entry per row of that video's `faces.csv`, in the same order; NaN where no face
 was found.
+
+
+## Frame models
+
+Code in `src/frames/`. Each backbone is fine-tuned on face crops to output a
+fake probability per crop and a feature vector for the temporal models.
+
+| `--backbone` | timm weights | Input | Features |
+|---|---|---|---|
+| `xception` | `legacy_xception.tf_in1k` | 299 | 2048 |
+| `efficientnet_b4` | `tf_efficientnet_b4.ap_in1k` | 380 | 1792 |
+| `vit_b16` | `vit_base_patch16_224.augreg_in21k` | 224 | 768 |
+| `clip_vit_b16` | `vit_base_patch16_clip_224.openai` | 224 | 768 |
+
+- **Quality filter:** crops with a RetinaFace score below 0.9 or a crop side
+  under 64 px in the original frame are left out (`--min-score`, `--min-side`).
+- **Balanced sampling:** each epoch draws real and fake equally often, and
+  every video equally often within its class.
+- **Call quality:** half the training crops (`--degrade-prob`) get random
+  lighting, noise, blur, downscaling and strong JPEG compression
+  (`src/frames/degrade.py`). `predict --call-quality` applies the same to the
+  test crops, identically for every model.
+- **Self-Blended Images** (`--sbi only` or `--sbi mix`): real crops blended with
+  an altered copy of themselves inside a soft face mask, labelled fake
+  (`src/frames/sbi.py`). `only` trains on real crops and SBI fakes alone, as in
+  the paper.
+- **Which weights train** (`--train-mode`): `full`, `linear` (head only), or
+  `norm` (head and normalisation layers; the light CLIP fine-tune).
+- **Unseen methods:** `--exclude-methods NeuralTextures` leaves a method out of
+  train and val; `predict` still scores it.
+
+### Input setting: mask vs no-mask
+
+Every model is trained in one of two input settings, chosen with `--mask`:
+
+| Setting | Flag | The model sees |
+|---|---|---|
+| `no-mask` | (none) | the plain face crop, with hair, neck and background |
+| `mask` | `--mask` | only the face: outside the 68-landmark outline (extended over the forehead, plus a small border) is black |
+
+All masking code is in `src/frames/mask.py`, applied in one marked step of
+`FaceFrames.__getitem__` (`src/frames/dataset.py`). The setting is part of the
+run name and folder, and `predict` reads it from the run, so a model is always
+tested the way it was trained. Preview the mask on a few crops:
+`python -m src.frames.mask --data-root ~/data` (writes `~/data/previews/mask/`).
+
+### Running
+
+Baselines (the four backbones, each with and without the mask; 8 runs), in
+tmux on the GPU machine:
+
+```
+bash scripts/run_frame_baselines.sh --epochs 1 --samples-per-epoch 256 --val-frames 1  # quick test
+bash scripts/run_frame_baselines.sh
+```
+
+Each run trains, then scores the test split clean and at call quality. The
+script is safe to rerun after the machine stops: finished runs are skipped and
+unfinished ones continue. It ends by printing the comparison table
+(`python -m src.frames.compare`, also saved as `~/data/runs/frames/comparison.csv`).
+
+Single runs:
+
+```
+python -m src.frames.train --backbone efficientnet_b4            # no-mask
+python -m src.frames.train --backbone efficientnet_b4 --mask     # mask
+python -m src.frames.train --backbone efficientnet_b4 --sbi only
+```
+
+Runs are saved by input setting:
+
+```
+~/data/runs/frames/
+├── no-mask/<run name>/      best.pt, last.pt, metrics.csv, predictions/
+├── mask/<run name>/
+└── comparison.csv
+```
+
+If the machine stops mid-run, rerun the same command with `--resume`. To score
+again or score other splits, use `python -m src.frames.predict --run <run folder>`;
+for the temporal models, save features for every split with
+`predict --split train --features` (and `val`, `test`).

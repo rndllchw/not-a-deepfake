@@ -68,14 +68,16 @@ at `/mnt/sdd` and linked to `~/data`.
 │       ├── FaceSwap/c23/videos/
 │       └── NeuralTextures/c23/videos/
 │           └── 000_003.mp4 …               fake made from real videos 000 and 003
-└── celebdf/                                Celeb-DF v2
-    ├── Celeb-real/
-    │   └── id0_0000.mp4 …                  590 real clips of 59 celebrities (person 0, clip 0000)
-    ├── YouTube-real/
-    │   └── 00000.mp4 …                     300 extra real clips of other people from YouTube
-    ├── Celeb-synthesis/
-    │   └── id0_id16_0000.mp4 …             5,639 fakes, faces swapped between celebrities 0 and 16
-    └── List_of_testing_videos.txt          official 518-video test list ("1" = real, "0" = fake)
+├── celebdf/                                Celeb-DF v2
+│   ├── Celeb-real/
+│   │   └── id0_0000.mp4 …                  590 real clips of 59 celebrities (person 0, clip 0000)
+│   ├── YouTube-real/
+│   │   └── 00000.mp4 …                     300 extra real clips of other people from YouTube
+│   ├── Celeb-synthesis/
+│   │   └── id0_id16_0000.mp4 …             5,639 fakes, faces swapped between celebrities 0 and 16
+│   └── List_of_testing_videos.txt          official 518-video test list ("1" = real, "0" = fake)
+└── dfdc/                                   DFDC, any folder layout below this
+    └── …/abcdefghij.mp4                    labelled by a metadata.json or labels.csv found anywhere under dfdc/
 ```
 
 `c23` is FF++'s high-quality compression level; FF++ also comes as `raw`
@@ -96,6 +98,17 @@ backgrounds instead of detecting manipulation.
   videos go to train or val: 10% of the celebrities and 10% of the YouTube clips
   (chosen with a fixed seed) go to val, everything else to train. Celeb-DF test
   videos share people with train, so treat Celeb-DF test results as in-domain.
+- **DFDC:** every video is **test**. Models train and choose their best epoch
+  on FF++ and Celeb-DF only, so DFDC is the unseen dataset. Labels come from
+  `metadata.json` files (`"label": "FAKE"`/`"REAL"`, and `"original"`: the
+  real video a fake was made from, kept in `source_ids`) or a `labels.csv`
+  (`filename,label`, 1 = fake). Videos with no label are left out, with a warning.
+
+| | train | val | test |
+|---|---|---|---|
+| FaceForensics++ | ✓ | ✓ | ✓ in-domain |
+| Celeb-DF | ✓ | ✓ | ✓ in-domain |
+| DFDC | | | ✓ unseen dataset |
 
 **Dropped videos.** A Celeb-DF fake shows two people. If one of them is in
 train and the other in val, the fake would put a person on both sides whichever

@@ -4,7 +4,7 @@ One row per video.
 
 Only reads file names, not video contents.
 Run on the Ronin machine:
-    python -m src.data.build_index --data-root ~/data
+    python -m src.preprocessing.build_index --data-root ~/data
 
 Expected layout from official download scripts:
     {data_root}/raw/ffpp/original_sequences/youtube/c23/videos/000.mp4

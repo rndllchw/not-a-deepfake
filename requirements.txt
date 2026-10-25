@@ -6,3 +6,5 @@ torch
 torchvision
 batch-face==1.4.0  # RetinaFace; later versions also pull in a head-pose model and its dependencies
 face-alignment==1.5.0  # FAN, 68-point landmarks
+timm>=1.0  # pretrained backbones (Xception, EfficientNet-B4, ViT, CLIP ViT)
+scikit-learn  # AUC and other metrics

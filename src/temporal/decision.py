@@ -42,7 +42,7 @@ def rate_at(run_scores: np.ndarray, thresholds: np.ndarray) -> np.ndarray:
     if len(run_scores) == 0:
         return np.full(len(thresholds), np.nan)
     ordered = np.sort(run_scores)
-    return 1 - np.searchsorted(ordered, thresholds, side="left") / len(ordered)
+    return (len(ordered) - np.searchsorted(ordered, thresholds, side="left")) / len(ordered)
 
 
 def choose_rule(val: dict[str, pd.DataFrame], ns=(1, 2, 3, 4), max_fpr: float = 0.01) -> dict:

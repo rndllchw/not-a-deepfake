@@ -274,3 +274,28 @@ If the machine stops mid-run, rerun the same command with `--resume`. To score
 again or score other splits, use `python -m src.frames.predict --run <run folder>`;
 for the temporal models, save features for every split with
 `predict --split train --features` (and `val`, `test`).
+
+
+## Analysis
+
+Training curves and error analysis for the frame models, in `src/analysis/frames.py`.
+It only reads each run's `metrics.csv` and `predictions/`, so it needs no GPU:
+
+```
+python -m src.analysis.frames                     # on the GPU machine; writes ~/data/analysis/frames/
+python -m src.analysis.frames --data-root <folder> --out <folder>/analysis   # elsewhere
+```
+
+To run it on a laptop, copy `~/data/runs/frames/` into `<folder>/runs/frames/`
+without the weights and features (`best.pt`, `last.pt`, `*.npy`).
+
+| Output | Shows |
+|---|---|
+| `1_training_curves.png` | Train loss and val video AUC per epoch; the kept checkpoint is marked |
+| `2_vit_score_distributions.png`, `3_dfdc_score_distributions_all_models.png` | Video scores of real and fake videos, per test dataset |
+| `thresholds.csv` | Accuracy, TPR and FPR at 0.5, at a threshold chosen on val, and at each test set's own best threshold |
+| `4_auc_per_method.png`, `auc_per_method.csv` | Video AUC per fake method (clean test) |
+| `5_clean_vs_call_quality.png`, `clean_vs_call.csv` | Video AUC on the clean and call-quality test sets |
+| `dfdc_hard_videos.csv` | Each DFDC video's score per model, and how many models get it wrong at 0.5 |
+
+The runs it reads are listed in `RUNS` at the top of the script; add new runs there.

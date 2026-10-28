@@ -293,7 +293,7 @@ without the weights and features (`best.pt`, `last.pt`, `*.npy`).
 |---|---|
 | `1_training_curves.png` | Train loss and val video AUC per epoch; the kept checkpoint is marked |
 | `2_vit_score_distributions.png`, `3_dfdc_score_distributions_all_models.png` | Video scores of real and fake videos, per test dataset |
-| `thresholds.csv` | Accuracy, TPR and FPR at 0.5, at a threshold chosen on val, and at each test set's own best threshold |
+| `thresholds.csv` | Accuracy, TPR and FPR at 0.5, at the threshold chosen on val as in the decision rule (lowest with val FPR <= 1%; only runs scored with `predict --split val`), and at each test set's own best threshold |
 | `4_auc_per_method.png`, `auc_per_method.csv` | Video AUC per fake method (clean test) |
 | `5_clean_vs_call_quality.png`, `clean_vs_call.csv` | Video AUC on the clean and call-quality test sets |
 | `dfdc_hard_videos.csv` | Each DFDC video's score per model, and how many models get it wrong at 0.5 |

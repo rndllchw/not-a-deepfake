@@ -13,7 +13,8 @@ Writes to {out} (default {data_root}/analysis/frames):
     3_dfdc_score_distributions_all_models   the same on DFDC, every model
     4_auc_per_method.png, auc_per_method.csv     video AUC per fake method (clean test)
     5_clean_vs_call_quality.png, clean_vs_call.csv    video AUC clean vs call quality
-    thresholds.csv       accuracy, TPR and FPR at 0.5, at a val-chosen threshold, and at each test set's best threshold
+    thresholds.csv       accuracy, TPR and FPR at 0.5, at the val threshold of the decision rule (lowest with
+                         val FPR <= --max-fpr, 1%), and at each test set's best threshold
     dfdc_hard_videos.csv every DFDC video's score per model and how many models get it wrong at 0.5
 A video's score is the mean of its frame probabilities, as in src.metrics.
 """
@@ -90,6 +91,15 @@ def best_threshold(videos: pd.DataFrame) -> float:
     return float(candidates[int(np.argmax(scores))])
 
 
+def low_fpr_threshold(videos: pd.DataFrame, max_fpr: float) -> float:
+    """Lowest threshold that flags at most max_fpr of the real videos, i.e. the one that catches the
+    most fakes within that FPR: the rule of src.temporal.decision with N = 1."""
+    real = np.sort(videos.loc[videos.label == 0, "prob"].to_numpy())
+    candidates = np.unique(np.append(videos.prob, 1.0 + 1e-6))  # the last flags nothing, so always passes
+    fpr = 1 - np.searchsorted(real, candidates, side="left") / len(real)
+    return float(candidates[int(np.argmax(fpr <= max_fpr))])  # FPR only falls as the threshold rises
+
+
 def save(fig, out: Path, name: str) -> None:
     fig.savefig(out / name, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -151,20 +161,22 @@ def score_distributions(test: dict, out: Path) -> None:
     save(fig, out, "3_dfdc_score_distributions_all_models.png")
 
 
-def threshold_table(runs_dir: Path, test: dict) -> pd.DataFrame:
-    """Accuracy at 0.5, at a threshold chosen on val (runs with val predictions), and
-    at the best threshold for that test set itself (an oracle, to show how far off 0.5 is)."""
+def threshold_table(runs_dir: Path, test: dict, max_fpr: float) -> pd.DataFrame:
+    """Accuracy at 0.5, at the threshold chosen on clean val as in the decision rule (lowest with
+    FPR <= max_fpr; runs with val predictions), and at the best threshold for that test set
+    itself (an oracle, to show how far off 0.5 is)."""
     val = load_all(runs_dir, "val")
     rows = []
     for label, videos in test.items():
-        val_t = best_threshold(val[label]) if label in val else None
+        val_t = low_fpr_threshold(val[label], max_fpr) if label in val else None
         for key, name in DATASETS.items():
             part = videos[videos.dataset == key]
             row = dict(model=label, dataset=name, n_real=int((part.label == 0).sum()),
                        n_fake=int((part.label == 1).sum()))
             row.update({f"{k}@0.5": v for k, v in rates(part, 0.5).items()})
             if val_t is not None:
-                row["val_threshold"] = val_t
+                # val has few reals, so at 1% only 2-3 may score above it: keep the FPR it reached
+                row["val_threshold"], row["fpr_on_val"] = val_t, rates(val[label], val_t)["fpr"]
                 row.update({f"{k}@val": v for k, v in rates(part, val_t).items()})
             oracle = best_threshold(part)
             row["oracle_threshold"] = oracle
@@ -255,6 +267,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     parser.add_argument("--data-root", type=Path, default=Path("~/data"))
     parser.add_argument("--out", type=Path, default=None, help="default: {data_root}/analysis/frames")
+    parser.add_argument("--max-fpr", type=float, default=0.01,
+                        help="false-positive rate allowed on val when choosing the val threshold")
     args = parser.parse_args()
 
     data_root = args.data_root.expanduser()
@@ -276,10 +290,10 @@ def main() -> None:
           .unstack("label").round(3).to_string())
 
     print("\n== Thresholds ==")
-    thresholds = threshold_table(runs_dir, test)
+    thresholds = threshold_table(runs_dir, test, args.max_fpr)
     thresholds.to_csv(out / "thresholds.csv", index=False)
     cols = ["model", "dataset", "n_real", "n_fake", "acc@0.5", "tpr@0.5", "fpr@0.5", "val_threshold",
-            "balanced_acc@val", "oracle_threshold", "balanced_acc@oracle"]
+            "fpr_on_val", "tpr@val", "fpr@val", "oracle_threshold", "balanced_acc@oracle"]
     print(thresholds[[c for c in cols if c in thresholds]].round(3).to_string(index=False))
 
     print("\n== AUC per method ==")

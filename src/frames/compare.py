@@ -30,7 +30,8 @@ def collect(runs_dir: Path) -> pd.DataFrame:
                 # the run without its mask setting, so the mask and no-mask versions line up
                 model=run.replace(f"_{mask_setting}_", "_"), input=mask_setting, run=run, backbone=m["backbone"],
                 test_set="call quality" if m["call_quality"] else "clean", dataset=dataset,
-                video_auc=d.get("video_auc"), video_acc=d.get("video_acc"), video_f1=d.get("video_f1"),
+                video_auc=d.get("video_auc"), video_eer=d.get("video_eer"),
+                video_acc=d.get("video_acc"), video_f1=d.get("video_f1"),
                 video_tpr_at_1pct_fpr=d.get("video_tpr_at_fpr"), frame_auc=d.get("frame_auc"),
                 ms_per_frame=m["ms_per_frame_single"],
                 **{f"auc_{k}": v for k, v in d["video_auc_per_method"].items()}))

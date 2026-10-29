@@ -20,8 +20,9 @@ We build a classifier that decides whether the face of a video-call participant 
 test on an unseen dataset: a DFDC subset. Each dataset's own test split is
 kept for in-domain results (Celeb-DF: the official 518-video test list).
 
-**Metrics:** frame- and video-level AUC, accuracy, F1, TPR at low FPR, and
-inference time.
+**Metrics:** frame- and video-level AUC, equal error rate (EER: the error rate
+at the threshold where real faces flagged and fakes missed are equally common),
+accuracy, F1, TPR at low FPR, and inference time.
 
 
 ## Setup

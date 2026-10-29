@@ -34,7 +34,8 @@ def collect(temporal_dir: Path) -> pd.DataFrame:
             rows.append(dict(
                 input=agg_dir.parents[1].name, frame_run=agg_dir.parent.name, aggregator=agg_dir.name,
                 test_set="call quality" if m["call_quality"] else "clean", dataset=dataset,
-                video_auc=d.get("video_auc"), video_acc=d.get("video_acc"), video_f1=d.get("video_f1"),
+                video_auc=d.get("video_auc"), video_eer=d.get("video_eer"),
+                video_acc=d.get("video_acc"), video_f1=d.get("video_f1"),
                 video_tpr_at_1pct_fpr=d.get("video_tpr_at_fpr"), window_auc=d.get("window_auc"),
                 ms_head_per_window=head_ms,
                 ms_per_window_total=None if frame_ms is None else WINDOW_FRAMES * frame_ms + head_ms,

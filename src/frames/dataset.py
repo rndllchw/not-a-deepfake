@@ -14,7 +14,7 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 
-from src.frames.degrade import degrade
+from src.frames.degrade import apply_call, call_settings, degrade
 from src.frames.mask import apply_mask
 from src.frames.sbi import self_blend
 
@@ -51,7 +51,8 @@ class FaceFrames(Dataset):
                    False is the "no-mask" setting, the plain crop
     train:         random horizontal flip, and call-quality degradation with probability degrade_prob
     sbi_prob:      chance that a real crop is replaced by a Self-Blended fake (label 1)
-    call_quality:  for evaluation; every crop is degraded, the same way each time
+    call_quality:  for evaluation; every crop is degraded, the same way each time, with settings
+                   drawn once per window so they hold steady over its frames (see degrade.py)
     """
 
     def __init__(self, frames: pd.DataFrame, faces_dir: Path, data_config: dict, mask: bool = False,
@@ -61,6 +62,7 @@ class FaceFrames(Dataset):
         self.crops = frames["crop"].tolist()
         self.labels = frames["label"].to_numpy()
         self.video_ids = frames["video_id"].tolist()
+        self.windows = frames["window"].to_numpy()
         self.lm_rows = frames["lm_row"].to_numpy()
         self.faces_dir = faces_dir
         _, h, w = data_config["input_size"]
@@ -78,7 +80,8 @@ class FaceFrames(Dataset):
         if img is None:
             raise FileNotFoundError(self.faces_dir / self.crops[i])
         label = int(self.labels[i])
-        # Call-quality test sets use a fixed generator per crop, so every model sees the same images.
+        # Call-quality test sets use fixed generators, so every model sees the same images:
+        # one per crop (its sensor noise) and one per window (the call's settings).
         rng = np.random.default_rng(zlib.crc32(self.crops[i].encode()) if self.call_quality else None)
         make_sbi = label == 0 and self.sbi_prob and rng.random() < self.sbi_prob
         points = None
@@ -90,8 +93,11 @@ class FaceFrames(Dataset):
         if make_sbi:
             img, label = self_blend(img, points, rng), 1
         # 2. Call quality: the whole crop is degraded, as the call would degrade the whole frame
-        if (self.train and rng.random() < self.degrade_prob) or (not self.train and self.call_quality):
+        if self.train and rng.random() < self.degrade_prob:
             img = degrade(img, rng)
+        elif not self.train and self.call_quality:
+            window_rng = np.random.default_rng(zlib.crc32(f"{self.video_ids[i]}/{self.windows[i]}".encode()))
+            img = apply_call(img, call_settings(window_rng), rng)
         # 3. MASK setting only: black out everything but the face
         if self.mask:
             img = apply_mask(img, points)

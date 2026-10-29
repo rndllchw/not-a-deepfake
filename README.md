@@ -213,7 +213,9 @@ fake probability per crop and a feature vector for the temporal models.
 - **Call quality:** half the training crops (`--degrade-prob`) get random
   lighting, noise, blur, downscaling and strong JPEG compression
   (`src/frames/degrade.py`). `predict --call-quality` applies the same to the
-  test crops, identically for every model.
+  test crops, identically for every model, with the settings drawn once per
+  window so they hold steady over its 32 frames as in a real call; only the
+  sensor noise changes from frame to frame.
 - **Self-Blended Images** (`--sbi only` or `--sbi mix`): real crops blended with
   an altered copy of themselves inside a soft face mask, labelled fake
   (`src/frames/sbi.py`). `only` trains on real crops and SBI fakes alone, as in

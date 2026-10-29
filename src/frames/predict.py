@@ -131,7 +131,8 @@ def score_run(run: Path, data_root: Path, split: str = "test", datasets: list[st
     for dataset_name, m in results.items():
         if isinstance(m, dict):
             print(f"{dataset_name}: frame AUC {m.get('frame_auc', float('nan')):.3f} | video AUC "
-                  f"{m.get('video_auc', float('nan')):.3f}, acc {m.get('video_acc', float('nan')):.3f}, "
+                  f"{m.get('video_auc', float('nan')):.3f}, EER {m.get('video_eer', float('nan')):.3f}, "
+                  f"acc {m.get('video_acc', float('nan')):.3f}, "
                   f"TPR@1%FPR {m.get('video_tpr_at_fpr', float('nan')):.3f} | per method "
                   + ", ".join(f"{k} {v:.3f}" for k, v in m["video_auc_per_method"].items() if v is not None))
     print(f"{batched_ms:.2f} ms/frame batched, {results['ms_per_frame_single']:.2f} ms/frame one at a time")

@@ -10,16 +10,27 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, roc_curve
 
 
+def equal_error_rate(fpr: np.ndarray, tpr: np.ndarray) -> float:
+    """The error rate at the threshold where real faces flagged (FPR) and fakes missed
+    (1 - TPR) are equally common, interpolated between the two ROC points around it."""
+    gap = fpr - (1 - tpr)  # rises along the ROC curve, from -1 at (0, 0) to 1 at (1, 1)
+    i = int(np.argmax(gap >= 0))  # first point at or past the crossing; never 0, since gap[0] = -1
+    t = gap[i - 1] / (gap[i - 1] - gap[i])
+    return float(fpr[i - 1] + t * (fpr[i] - fpr[i - 1]))
+
+
 def binary_metrics(labels, probs, threshold: float = 0.5, max_fpr: float = 0.01) -> dict:
-    """AUC, accuracy and F1 at `threshold`, and the share of fakes caught when at
-    most `max_fpr` of real faces are flagged (TPR at low FPR). label 1 = fake."""
+    """AUC, accuracy and F1 at `threshold`, the share of fakes caught when at most
+    `max_fpr` of real faces are flagged (TPR at low FPR), and the equal error rate.
+    label 1 = fake."""
     labels, probs = np.asarray(labels), np.asarray(probs)
     if len(np.unique(labels)) < 2:
         return dict(n=len(labels))  # AUC needs both real and fake
     fpr, tpr, _ = roc_curve(labels, probs)
     pred = probs >= threshold
     return dict(n=len(labels), auc=float(roc_auc_score(labels, probs)), acc=float(accuracy_score(labels, pred)),
-                f1=float(f1_score(labels, pred)), tpr_at_fpr=float(tpr[np.searchsorted(fpr, max_fpr, side="right") - 1]))
+                f1=float(f1_score(labels, pred)), tpr_at_fpr=float(tpr[np.searchsorted(fpr, max_fpr, side="right") - 1]),
+                eer=equal_error_rate(fpr, tpr))
 
 
 def video_scores(frames: pd.DataFrame) -> pd.DataFrame:

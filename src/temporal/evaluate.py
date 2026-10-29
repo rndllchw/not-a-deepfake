@@ -61,7 +61,8 @@ def main() -> None:
         for dataset, m in results.items():
             if isinstance(m, dict):
                 print(f"{name} {dataset}: window AUC {m.get('window_auc', float('nan')):.3f} | video AUC "
-                      f"{m.get('video_auc', float('nan')):.3f}, acc {m.get('video_acc', float('nan')):.3f}, "
+                      f"{m.get('video_auc', float('nan')):.3f}, EER {m.get('video_eer', float('nan')):.3f}, "
+                      f"acc {m.get('video_acc', float('nan')):.3f}, "
                       f"TPR@1%FPR {m.get('video_tpr_at_fpr', float('nan')):.3f}")
 
 

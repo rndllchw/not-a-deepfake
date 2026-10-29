@@ -20,8 +20,9 @@ We build a classifier that decides whether the face of a video-call participant 
 test on an unseen dataset: a DFDC subset. Each dataset's own test split is
 kept for in-domain results (Celeb-DF: the official 518-video test list).
 
-**Metrics:** frame- and video-level AUC, accuracy, F1, TPR at low FPR, and
-inference time.
+**Metrics:** frame- and video-level AUC, equal error rate (EER: the error rate
+at the threshold where real faces flagged and fakes missed are equally common),
+accuracy, F1, TPR at low FPR, and inference time.
 
 
 ## Setup
@@ -52,8 +53,10 @@ personal access token typed at the prompt. Never save a token in the repo.
 Datasets are **not** stored in this repository. The FaceForensics++ terms of use
 forbid redistribution, and the files are too large for git.
 
-All data lives on the project's Ronin machine, on a separate data drive mounted
-at `/mnt/sdd` and linked to `~/data`.
+All data lives on the project's Ronin GPU machine, on a separate 100 GB data
+drive: `/mnt/sdd/data`, linked to `~/data`. The drive mounts by itself when the
+machine starts (it is in `/etc/fstab`); if `~/data` is missing, run
+`sudo mount -a`. `~/data/README.md` says what is where.
 
 ### Raw data layout
 
@@ -95,8 +98,9 @@ backgrounds instead of detecting manipulation.
   `["000", "003"]`, and puts `000.mp4`, `003.mp4`, `000_003.mp4` and
   `003_000.mp4` (in all four methods) into the same split.
 - **Celeb-DF:** the official 518-video list is the test split. The remaining
-  videos go to train or val: 10% of the celebrities and 10% of the YouTube clips
-  (chosen with a fixed seed) go to val, everything else to train. Celeb-DF test
+  videos go to train or val: 20% of the celebrities and, chosen separately, 20%
+  of the YouTube clips go to val (`--celebdf-val-frac`, seed 0), everything else
+  to train. Celeb-DF test
   videos share people with train, so treat Celeb-DF test results as in-domain.
 - **DFDC:** every video is **test**. Models train and choose their best epoch
   on FF++ and Celeb-DF only, so DFDC is the unseen dataset. Labels come from
@@ -112,9 +116,9 @@ backgrounds instead of detecting manipulation.
 
 **Dropped videos.** A Celeb-DF fake shows two people. If one of them is in
 train and the other in val, the fake would put a person on both sides whichever
-split it went to, so it is dropped. With 10% of people in val (seed 0) this
-removes 1,072 of the 5,299 non-test fakes (20%). Real videos are never dropped.
-`build_index` prints the exact number.
+split it went to, so it is dropped. With 20% of people in val (seed 0) this
+removes 1,824 of the 5,299 non-test fakes (34%), leaving 3,178 for train and
+297 for val. Real videos are never dropped. `build_index` prints the counts.
 
 Both datasets have far more fake than real videos (FF++ 4:1, Celeb-DF about
 6:1), so training should use class weights or balanced sampling.
@@ -141,6 +145,21 @@ python -m src.preprocessing.build_index --data-root ~/data   # writes ~/data/pro
 Read it with `pd.read_csv(path, dtype={"source_ids": str})` so IDs such as
 `000` keep their leading zeros.
 
+**The index we use is trimmed.** To save GPU time on face extraction, the
+Celeb-DF training fakes were cut to a random 1,000 of the 3,178; nothing else is
+reduced (training balances real and fake anyway). On Ronin:
+
+| File | Videos |
+|---|---|
+| `processed/index.csv` | 7,927 (5,166 train / 1,143 val / 1,618 test). The list every stage reads; it matches the extracted faces |
+| `processed/index_variants/index_full.csv` | 10,105: the untrimmed list, as `build_index` writes it. Not used |
+| `processed/index_variants/index_{train,val,test}.csv` | Parts of `index.csv`, for extracting faces one split at a time |
+
+`build_index` always writes the untrimmed list, so on Ronin run it only with
+`--out` pointing somewhere else: written over `processed/index.csv`, it no
+longer matches `faces/`. The code that drew the 1,000 is not in the repo; the
+trimmed `index.csv` itself is the record of which videos were used.
+
 ### Face crops
 
 Deepfakes only change the face, and the backbones take 224–380 px inputs, so
@@ -152,10 +171,23 @@ python -m src.preprocessing.extract_faces --data-root ~/data --limit 20   # quic
 python -m src.preprocessing.extract_faces --data-root ~/data              # everything
 ```
 
-- **Frames:** 2 windows of 32 consecutive frames per video, one in the middle
-  of each half (`--windows`, `--window-len`). The temporal models use the
-  windows; the frame models use the same crops. Videos shorter than two
-  windows get one.
+Ours was extracted one split at a time, with 2 windows per video for train and
+6 for val and test, then merged:
+
+```
+P=~/data/processed/index_variants
+python -m src.preprocessing.extract_faces --data-root ~/data --workers 2 --index $P/index_train.csv --windows 2
+python -m src.preprocessing.extract_faces --data-root ~/data --workers 2 --index $P/index_val.csv --windows 6
+python -m src.preprocessing.extract_faces --data-root ~/data --workers 2 --index $P/index_test.csv --windows 6
+python -m src.preprocessing.extract_faces --data-root ~/data --workers 2   # merges all into processed/faces.csv
+```
+
+- **Frames:** `--windows` runs of 32 consecutive frames (`--window-len`),
+  spread evenly: one in the middle of each of `--windows` equal parts of the
+  video (default 2). The temporal models use the windows; the frame models use
+  the same crops. More windows give steadier video-level results; fewer save
+  extraction time on the large train split. Videos too short for every window
+  get fewer.
 - **Faces:** detected with RetinaFace (ResNet-50, via `batch-face`), a whole
   window at a time, on frames shrunk to 960 px; crops come from the full frame.
   Each window starts with the largest face and follows it frame to frame, so a
@@ -171,17 +203,21 @@ python -m src.preprocessing.extract_faces --data-root ~/data              # ever
   fail are reported and retried on the next run.
 - **GPU:** `--workers` processes (default 4) decode videos on the CPU, and each
   loads its own copy of the models on the GPU. Lower it if the GPU runs out of
-  memory; raise it if the GPU sits idle and there are spare CPUs.
+  memory; raise it if the GPU sits idle and there are spare CPUs. On the
+  project's GPU machine use `--workers 2`: 4 ran out of GPU memory.
   `--device cpu` works for testing but is slow (~40 s/video).
 
 Output in `~/data/faces/<video_id>/`: one `<frame>.jpg` per frame with a face,
-`faces.csv`, and `landmarks68.npy`. All videos' rows are also merged into
-`~/data/processed/faces.csv`, one row per extracted frame:
+`faces.csv`, and `landmarks68.npy`. At the end of every run, the rows are also
+merged into `~/data/processed/faces.csv`, one row per extracted frame. That file
+is **rewritten from the videos in the index the run was given**, so after a run
+on one split it holds only that split. Rerun with the full `index.csv` to merge
+everything: finished videos are skipped, so nothing is extracted again.
 
 | Column | Meaning |
 |---|---|
 | `video_id`, `dataset`, `method`, `label`, `split` | As in the index |
-| `window`, `frame` | Window number in the video (0, 1) and frame number in the video |
+| `window`, `frame` | Window number in the video (0–1 in train, 0–5 in val and test) and frame number in the video |
 | `crop` | Crop path relative to `~/data/faces/`; empty if no face was found in that frame |
 | `score` | RetinaFace face confidence |
 | `crop_x`, `crop_y`, `crop_side` | Where the crop sits in the original frame (pixels) |
@@ -273,9 +309,91 @@ Runs are saved by input setting:
 ```
 
 If the machine stops mid-run, rerun the same command with `--resume`. To score
-again or score other splits, use `python -m src.frames.predict --run <run folder>`;
-for the temporal models, save features for every split with
-`predict --split train --features` (and `val`, `test`).
+again or score other splits, use `python -m src.frames.predict --run <run folder>`.
+Features for the temporal models are saved with `scripts/export_features.sh`
+(see [Temporal models](#temporal-models)).
+
+
+## Temporal models
+
+Code in `src/temporal/`. A temporal model turns the 32 frames of a window into
+one window score. It is built on one trained frame run, which stays fixed: the
+frame model scores every crop and exports its feature vector once, and the
+aggregators work from those.
+
+| Aggregator | Code | Window score |
+|---|---|---|
+| `mean` | `src.temporal.pooling --how mean` | average of the window's frame probabilities |
+| `topk-5` | `src.temporal.pooling --how topk --k 5` | average of its 5 highest frame probabilities |
+| `lstm` | `src.temporal.train --model lstm` | bidirectional LSTM (1 layer, 256 units) over the frame features |
+| `transformer` | `src.temporal.train --model transformer` | Transformer encoder (2 layers, width 256, 4 heads) with a classification token |
+
+Windows with fewer than 8 usable crops (after the frame model's quality filter)
+are left out for every aggregator (`--min-frames`).
+
+### Running
+
+In tmux on the GPU machine, from the repo root:
+
+```
+bash scripts/export_features.sh ~/data/runs/frames/no-mask/<run name>   # once per frame run
+bash scripts/run_temporal.sh ~/data/runs/frames/no-mask/<run name>      # pooling, LSTM, Transformer, evaluation, decision rule, comparison
+bash scripts/run_temporal.sh <frame run> --epochs 1 --samples-per-epoch 256   # quick test
+```
+
+`export_features.sh` runs `src.frames.predict --features` on val, test and
+train, each clean and at call quality, writing `<name>.csv` and
+`<name>_features.npy` (e.g. `train_call_features.npy`) into the frame run's
+`predictions/`.
+
+- **Training (LSTM, Transformer):** real and fake windows are drawn equally
+  often, and every video equally often within its class. Each window is either
+  all clean or all call quality, at random (`--train-versions`). Up to 30
+  epochs of 20,000 windows, AdamW at 3e-4 with warm-up and cosine decay. Keeps
+  the epoch with the best mean val video AUC (clean and call quality) and stops
+  after 6 epochs without improvement (`--patience`). Takes about a minute per
+  model.
+- **Evaluation** (`src.temporal.evaluate`): a video's score is the mean of its
+  window scores (`--video-how max`: the highest). Window and video metrics per
+  dataset, and video AUC per fake method.
+- **Decision rule** (`src.temporal.decision`): flag a video once N consecutive
+  windows score at or above a threshold. Chosen on val: for each N up to 4, the
+  lowest threshold that keeps the false-positive rate at or below 1%
+  (`--max-fpr`) on clean, call quality and both pooled; then the N that catches
+  the most fakes. Test is scored once with that rule. The windows are spread
+  through the video with gaps, so "consecutive" means consecutive windows, not
+  continuous time.
+- **Comparison** (`src.temporal.compare`): every aggregator's test results in
+  `runs/temporal/comparison.csv`. These are for reporting; choose the
+  aggregator and the rule on val.
+
+Output, next to the frame run it is built on:
+
+```
+~/data/runs/temporal/
+├── comparison.csv
+└── no-mask/<frame run name>/
+    ├── mean/, topk-5/                      predictions/, decision.json, decision_test.csv
+    └── lstm/, transformer/                 also args.json, metrics.csv, best.pt, last.pt, timing.json
+```
+
+| File | Contents |
+|---|---|
+| `predictions/<name>_windows.csv` | One row per window: `video_id`, `window`, `dataset`, `method`, `label`, `score` (fake probability); `<name>` is `val`, `val_call`, `test` or `test_call` |
+| `predictions/<name>_metrics.json` | Window and video metrics per dataset, video AUC per fake method |
+| `decision.json` | The rule chosen on val (N, threshold) and its val FPR and TPR |
+| `decision_test.csv` | The rule on test: FPR, TPR and median windows until a fake is flagged, per dataset |
+| `metrics.csv` | Train loss and val video AUC per epoch |
+| `timing.json` | Milliseconds per window for the temporal model alone |
+
+**Rerunning with new inputs.** Both scripts skip work they think is finished.
+`export_features.sh` skips an export whose `.csv` is newer than its `.npy`, and
+`run_temporal.sh` resumes training (`--resume`), so a run that already stopped
+early stops again at once and only rescores. To redo them after the frame
+model's inputs change (for example the call-quality degradation), first delete
+the old exports in the frame run's `predictions/` (`*_call.csv`,
+`*_call_features.npy`, and the clean ones if those changed too) and the frame
+run's folder under `runs/temporal/`.
 
 
 ## Analysis
@@ -301,3 +419,26 @@ without the weights and features (`best.pt`, `last.pt`, `*.npy`).
 | `dfdc_hard_videos.csv` | Each DFDC video's score per model, and how many models get it wrong at 0.5 |
 
 The runs it reads are listed in `RUNS` at the top of the script; add new runs there.
+
+### Grad-CAM
+
+Heatmaps of which parts of a face crop drove each frame model's decision, in
+`src/analysis/gradcam.py`. It needs the runs' `best.pt` and the face crops, so
+it runs on the GPU machine:
+
+```
+python -m src.analysis.gradcam --per-dataset 4   # quick test
+python -m src.analysis.gradcam                   # writes ~/data/analysis/gradcam/
+```
+
+Example crops come from the test predictions, one frame per video: for each FF++
+method and Celeb-DF, a fake and a real that every model gets right; the DFDC
+fakes every model misses; and DFDC videos every model gets right. Each crop is
+preprocessed exactly as in training (masked for mask runs).
+
+| Output | Shows |
+|---|---|
+| `1_in_domain.png`, `2_dfdc_missed.png`, `3_dfdc_correct.png` | Each crop, then each model's map |
+| `4_sanity_random_weights.png` | Trained models next to randomly initialised ones; maps that look alike would mean Grad-CAM shows edges, not what the model learned |
+| `face_share.csv` | Share of each map inside the face outline, next to the share of the crop the face covers |
+| `examples.csv` | The chosen crops, why they were chosen, and every model's scores |

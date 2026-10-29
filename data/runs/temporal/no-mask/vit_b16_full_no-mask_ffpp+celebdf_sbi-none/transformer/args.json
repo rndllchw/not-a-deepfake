@@ -1,0 +1,25 @@
+{
+  "frame_run": "/home/ubuntu/data/runs/frames/no-mask/vit_b16_full_no-mask_ffpp+celebdf_sbi-none",
+  "model": "transformer",
+  "train_versions": [
+    "clean",
+    "call"
+  ],
+  "min_frames": 8,
+  "hidden": 256,
+  "layers": 2,
+  "heads": 4,
+  "dropout": 0.1,
+  "epochs": 30,
+  "samples_per_epoch": 20000,
+  "batch_size": 64,
+  "lr": 0.0003,
+  "weight_decay": 0.01,
+  "patience": 6,
+  "workers": 2,
+  "seed": 0,
+  "run_name": "transformer",
+  "resume": true,
+  "skip_test": false,
+  "d_in": 768
+}

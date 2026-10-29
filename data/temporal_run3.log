@@ -1,0 +1,218 @@
+=== pooling ===
+val: 218537 frames -> 6834 windows of 1143 videos
+val_call: 218537 frames -> 6834 windows of 1143 videos
+test: 309698 frames -> 9682 windows of 1618 videos
+test_call: 309698 frames -> 9682 windows of 1618 videos
+wrote /home/ubuntu/data/runs/temporal/no-mask/vit_b16_full_no-mask_ffpp+celebdf_sbi-none/mean/predictions
+val: 218537 frames -> 6834 windows of 1143 videos
+val_call: 218537 frames -> 6834 windows of 1143 videos
+test: 309698 frames -> 9682 windows of 1618 videos
+test_call: 309698 frames -> 9682 windows of 1618 videos
+wrote /home/ubuntu/data/runs/temporal/no-mask/vit_b16_full_no-mask_ffpp+celebdf_sbi-none/topk-5/predictions
+=== lstm ===
+train: 10321 windows from 5165 videos | Celeb-real 381, Celeb-synthesis 1000, Deepfakes 720, Face2Face 720, FaceSwap 720, NeuralTextures 720, YouTube-real 184, real 720
+val clean: 6834 windows from 1143 videos | Celeb-real 100, Celeb-synthesis 297, Deepfakes 140, Face2Face 140, FaceSwap 140, NeuralTextures 140, YouTube-real 46, real 140
+val call: 6834 windows from 1143 videos | Celeb-real 100, Celeb-synthesis 297, Deepfakes 140, Face2Face 140, FaceSwap 140, NeuralTextures 140, YouTube-real 46, real 140
+lstm: 30 epochs x 312 steps on cuda, lr 0.0003, 2,103,297 parameters
+  step 100/312 | loss 0.3040 | 0.017 s/step
+  step 200/312 | loss 0.1566 | 0.014 s/step
+  step 300/312 | loss 0.1052 | 0.013 s/step
+epoch 1: loss 0.1012 | val video AUC clean 0.9882, call 0.9685 | 0.1 min
+  step 100/312 | loss 0.0018 | 0.012 s/step
+  step 200/312 | loss 0.0023 | 0.012 s/step
+  step 300/312 | loss 0.0020 | 0.012 s/step
+epoch 2: loss 0.0020 | val video AUC clean 0.9881, call 0.9689 | 0.1 min
+  step 100/312 | loss 0.0023 | 0.012 s/step
+  step 200/312 | loss 0.0015 | 0.012 s/step
+  step 300/312 | loss 0.0012 | 0.012 s/step
+epoch 3: loss 0.0012 | val video AUC clean 0.9885, call 0.9697 | 0.1 min
+  step 100/312 | loss 0.0015 | 0.012 s/step
+  step 200/312 | loss 0.0014 | 0.012 s/step
+  step 300/312 | loss 0.0014 | 0.012 s/step
+epoch 4: loss 0.0013 | val video AUC clean 0.9892, call 0.9722 | 0.1 min
+  step 100/312 | loss 0.0008 | 0.012 s/step
+  step 200/312 | loss 0.0008 | 0.012 s/step
+  step 300/312 | loss 0.0010 | 0.012 s/step
+epoch 5: loss 0.0010 | val video AUC clean 0.9888, call 0.9705 | 0.1 min
+  step 100/312 | loss 0.0006 | 0.012 s/step
+  step 200/312 | loss 0.0006 | 0.012 s/step
+  step 300/312 | loss 0.0006 | 0.012 s/step
+epoch 6: loss 0.0007 | val video AUC clean 0.9884, call 0.9695 | 0.1 min
+  step 100/312 | loss 0.0004 | 0.012 s/step
+  step 200/312 | loss 0.0003 | 0.012 s/step
+  step 300/312 | loss 0.0005 | 0.012 s/step
+epoch 7: loss 0.0004 | val video AUC clean 0.9869, call 0.9687 | 0.1 min
+  step 100/312 | loss 0.0009 | 0.012 s/step
+  step 200/312 | loss 0.0006 | 0.012 s/step
+  step 300/312 | loss 0.0005 | 0.012 s/step
+epoch 8: loss 0.0005 | val video AUC clean 0.9887, call 0.9702 | 0.1 min
+  step 100/312 | loss 0.0005 | 0.012 s/step
+  step 200/312 | loss 0.0004 | 0.011 s/step
+  step 300/312 | loss 0.0004 | 0.011 s/step
+epoch 9: loss 0.0003 | val video AUC clean 0.9868, call 0.9698 | 0.1 min
+  step 100/312 | loss 0.0003 | 0.012 s/step
+  step 200/312 | loss 0.0008 | 0.012 s/step
+  step 300/312 | loss 0.0007 | 0.012 s/step
+epoch 10: loss 0.0007 | val video AUC clean 0.9872, call 0.9702 | 0.1 min
+no improvement for 6 epochs, stopping
+best mean val video AUC 0.9807; weights in /home/ubuntu/data/runs/temporal/no-mask/vit_b16_full_no-mask_ffpp+celebdf_sbi-none/lstm/best.pt
+val: 6834 windows of 1143 videos
+val_call: 6834 windows of 1143 videos
+test: 9682 windows of 1618 videos
+test_call: 9682 windows of 1618 videos
+1.20 ms per window (temporal model only)
+=== transformer ===
+train: 10321 windows from 5165 videos | Celeb-real 381, Celeb-synthesis 1000, Deepfakes 720, Face2Face 720, FaceSwap 720, NeuralTextures 720, YouTube-real 184, real 720
+val clean: 6834 windows from 1143 videos | Celeb-real 100, Celeb-synthesis 297, Deepfakes 140, Face2Face 140, FaceSwap 140, NeuralTextures 140, YouTube-real 46, real 140
+val call: 6834 windows from 1143 videos | Celeb-real 100, Celeb-synthesis 297, Deepfakes 140, Face2Face 140, FaceSwap 140, NeuralTextures 140, YouTube-real 46, real 140
+transformer: 30 epochs x 312 steps on cuda, lr 0.0003, 1,262,081 parameters
+  step 100/312 | loss 0.1320 | 0.017 s/step
+  step 200/312 | loss 0.0683 | 0.014 s/step
+  step 300/312 | loss 0.0459 | 0.014 s/step
+epoch 1: loss 0.0442 | val video AUC clean 0.9874, call 0.9719 | 0.1 min
+  step 100/312 | loss 0.0030 | 0.012 s/step
+  step 200/312 | loss 0.0023 | 0.012 s/step
+  step 300/312 | loss 0.0024 | 0.012 s/step
+epoch 2: loss 0.0028 | val video AUC clean 0.9877, call 0.9724 | 0.1 min
+  step 100/312 | loss 0.0038 | 0.012 s/step
+  step 200/312 | loss 0.0025 | 0.012 s/step
+  step 300/312 | loss 0.0017 | 0.012 s/step
+epoch 3: loss 0.0017 | val video AUC clean 0.9878, call 0.9753 | 0.1 min
+  step 100/312 | loss 0.0015 | 0.012 s/step
+  step 200/312 | loss 0.0014 | 0.012 s/step
+  step 300/312 | loss 0.0018 | 0.012 s/step
+epoch 4: loss 0.0020 | val video AUC clean 0.9872, call 0.9704 | 0.1 min
+  step 100/312 | loss 0.0012 | 0.012 s/step
+  step 200/312 | loss 0.0009 | 0.012 s/step
+  step 300/312 | loss 0.0018 | 0.012 s/step
+epoch 5: loss 0.0018 | val video AUC clean 0.9886, call 0.9741 | 0.1 min
+  step 100/312 | loss 0.0005 | 0.012 s/step
+  step 200/312 | loss 0.0009 | 0.012 s/step
+  step 300/312 | loss 0.0010 | 0.012 s/step
+epoch 6: loss 0.0012 | val video AUC clean 0.9888, call 0.9757 | 0.1 min
+  step 100/312 | loss 0.0007 | 0.012 s/step
+  step 200/312 | loss 0.0005 | 0.012 s/step
+  step 300/312 | loss 0.0004 | 0.012 s/step
+epoch 7: loss 0.0004 | val video AUC clean 0.9848, call 0.9720 | 0.1 min
+  step 100/312 | loss 0.0018 | 0.012 s/step
+  step 200/312 | loss 0.0015 | 0.012 s/step
+  step 300/312 | loss 0.0013 | 0.012 s/step
+epoch 8: loss 0.0012 | val video AUC clean 0.9879, call 0.9759 | 0.1 min
+  step 100/312 | loss 0.0005 | 0.012 s/step
+  step 200/312 | loss 0.0004 | 0.012 s/step
+  step 300/312 | loss 0.0004 | 0.012 s/step
+epoch 9: loss 0.0004 | val video AUC clean 0.9770, call 0.9678 | 0.1 min
+  step 100/312 | loss 0.0003 | 0.012 s/step
+  step 200/312 | loss 0.0018 | 0.012 s/step
+  step 300/312 | loss 0.0021 | 0.012 s/step
+epoch 10: loss 0.0020 | val video AUC clean 0.9885, call 0.9750 | 0.1 min
+  step 100/312 | loss 0.0014 | 0.012 s/step
+  step 200/312 | loss 0.0012 | 0.012 s/step
+  step 300/312 | loss 0.0009 | 0.012 s/step
+epoch 11: loss 0.0009 | val video AUC clean 0.9886, call 0.9747 | 0.1 min
+  step 100/312 | loss 0.0001 | 0.012 s/step
+  step 200/312 | loss 0.0001 | 0.012 s/step
+  step 300/312 | loss 0.0002 | 0.012 s/step
+epoch 12: loss 0.0002 | val video AUC clean 0.9881, call 0.9739 | 0.1 min
+no improvement for 6 epochs, stopping
+best mean val video AUC 0.9822; weights in /home/ubuntu/data/runs/temporal/no-mask/vit_b16_full_no-mask_ffpp+celebdf_sbi-none/transformer/best.pt
+val: 6834 windows of 1143 videos
+val_call: 6834 windows of 1143 videos
+test: 9682 windows of 1618 videos
+test_call: 9682 windows of 1618 videos
+0.99 ms per window (temporal model only)
+=== evaluate and decide: mean ===
+val celebdf: window AUC 0.995 | video AUC 0.998, acc 0.975, TPR@1%FPR 0.976
+val ffpp: window AUC 0.979 | video AUC 0.982, acc 0.940, TPR@1%FPR 0.848
+val_call celebdf: window AUC 0.988 | video AUC 0.994, acc 0.959, TPR@1%FPR 0.896
+val_call ffpp: window AUC 0.943 | video AUC 0.951, acc 0.881, TPR@1%FPR 0.618
+test celebdf: window AUC 0.994 | video AUC 0.995, acc 0.977, TPR@1%FPR 0.915
+test dfdc: window AUC 0.882 | video AUC 0.907, acc 0.610, TPR@1%FPR 0.359
+test ffpp: window AUC 0.980 | video AUC 0.985, acc 0.949, TPR@1%FPR 0.891
+test_call celebdf: window AUC 0.988 | video AUC 0.992, acc 0.956, TPR@1%FPR 0.876
+test_call dfdc: window AUC 0.861 | video AUC 0.894, acc 0.512, TPR@1%FPR 0.579
+test_call ffpp: window AUC 0.950 | video AUC 0.959, acc 0.891, TPR@1%FPR 0.743
+rule: flag after 2 consecutive windows >= 0.9227 | val FPR clean 0.007, call 0.007, pooled 0.007 | val TPR pooled 0.828
+    test_set dataset  n_real  n_fake   fpr   tpr  median_delay_windows
+       clean     all     395    1223 0.005 0.738                   2.0
+       clean celebdf     178     340 0.006 0.938                   2.0
+       clean    dfdc      77     323 0.000 0.313                   2.0
+       clean    ffpp     140     560 0.007 0.862                   2.0
+call quality     all     395    1223 0.003 0.585                   2.0
+call quality celebdf     178     340 0.006 0.835                   2.0
+call quality    dfdc      77     323 0.000 0.149                   2.0
+call quality    ffpp     140     560 0.000 0.686                   2.0
+=== evaluate and decide: topk-5 ===
+val celebdf: window AUC 0.996 | video AUC 0.998, acc 0.964, TPR@1%FPR 0.966
+val ffpp: window AUC 0.978 | video AUC 0.982, acc 0.933, TPR@1%FPR 0.859
+val_call celebdf: window AUC 0.992 | video AUC 0.995, acc 0.930, TPR@1%FPR 0.912
+val_call ffpp: window AUC 0.949 | video AUC 0.953, acc 0.894, TPR@1%FPR 0.662
+test celebdf: window AUC 0.995 | video AUC 0.996, acc 0.950, TPR@1%FPR 0.909
+test dfdc: window AUC 0.881 | video AUC 0.900, acc 0.805, TPR@1%FPR 0.437
+test ffpp: window AUC 0.980 | video AUC 0.984, acc 0.947, TPR@1%FPR 0.855
+test_call celebdf: window AUC 0.992 | video AUC 0.993, acc 0.927, TPR@1%FPR 0.900
+test_call dfdc: window AUC 0.858 | video AUC 0.890, acc 0.780, TPR@1%FPR 0.607
+test_call ffpp: window AUC 0.951 | video AUC 0.958, acc 0.893, TPR@1%FPR 0.721
+rule: flag after 4 consecutive windows >= 0.9999 | val FPR clean 0.007, call 0.007, pooled 0.007 | val TPR pooled 0.812
+    test_set dataset  n_real  n_fake   fpr   tpr  median_delay_windows
+       clean     all     395    1223 0.003 0.703                   4.0
+       clean celebdf     178     340 0.000 0.900                   4.0
+       clean    dfdc      77     323 0.000 0.257                   4.0
+       clean    ffpp     140     560 0.007 0.841                   4.0
+call quality     all     395    1223 0.000 0.578                   4.0
+call quality celebdf     178     340 0.000 0.809                   4.0
+call quality    dfdc      77     323 0.000 0.167                   4.0
+call quality    ffpp     140     560 0.000 0.675                   4.0
+=== evaluate and decide: lstm ===
+val celebdf: window AUC 0.994 | video AUC 0.998, acc 0.975, TPR@1%FPR 0.949
+val ffpp: window AUC 0.975 | video AUC 0.982, acc 0.944, TPR@1%FPR 0.832
+val_call celebdf: window AUC 0.990 | video AUC 0.994, acc 0.962, TPR@1%FPR 0.869
+val_call ffpp: window AUC 0.945 | video AUC 0.952, acc 0.903, TPR@1%FPR 0.591
+test celebdf: window AUC 0.994 | video AUC 0.995, acc 0.975, TPR@1%FPR 0.891
+test dfdc: window AUC 0.875 | video AUC 0.896, acc 0.670, TPR@1%FPR 0.350
+test ffpp: window AUC 0.980 | video AUC 0.985, acc 0.953, TPR@1%FPR 0.850
+test_call celebdf: window AUC 0.989 | video AUC 0.992, acc 0.961, TPR@1%FPR 0.838
+test_call dfdc: window AUC 0.857 | video AUC 0.889, acc 0.578, TPR@1%FPR 0.511
+test_call ffpp: window AUC 0.953 | video AUC 0.958, acc 0.903, TPR@1%FPR 0.711
+rule: flag after 3 consecutive windows >= 0.9999 | val FPR clean 0.003, call 0.007, pooled 0.005 | val TPR pooled 0.754
+    test_set dataset  n_real  n_fake  fpr   tpr  median_delay_windows
+       clean     all     395    1223  0.0 0.639                   3.0
+       clean celebdf     178     340  0.0 0.879                   3.0
+       clean    dfdc      77     323  0.0 0.164                   3.0
+       clean    ffpp     140     560  0.0 0.766                   3.0
+call quality     all     395    1223  0.0 0.525                   3.0
+call quality celebdf     178     340  0.0 0.776                   3.0
+call quality    dfdc      77     323  0.0 0.102                   3.0
+call quality    ffpp     140     560  0.0 0.616                   3.0
+=== evaluate and decide: transformer ===
+val celebdf: window AUC 0.996 | video AUC 0.998, acc 0.973, TPR@1%FPR 0.953
+val ffpp: window AUC 0.978 | video AUC 0.980, acc 0.953, TPR@1%FPR 0.841
+val_call celebdf: window AUC 0.992 | video AUC 0.995, acc 0.968, TPR@1%FPR 0.882
+val_call ffpp: window AUC 0.953 | video AUC 0.957, acc 0.913, TPR@1%FPR 0.645
+test celebdf: window AUC 0.994 | video AUC 0.995, acc 0.969, TPR@1%FPR 0.894
+test dfdc: window AUC 0.878 | video AUC 0.896, acc 0.693, TPR@1%FPR 0.375
+test ffpp: window AUC 0.982 | video AUC 0.986, acc 0.960, TPR@1%FPR 0.864
+test_call celebdf: window AUC 0.991 | video AUC 0.992, acc 0.958, TPR@1%FPR 0.879
+test_call dfdc: window AUC 0.858 | video AUC 0.887, acc 0.685, TPR@1%FPR 0.489
+test_call ffpp: window AUC 0.958 | video AUC 0.964, acc 0.927, TPR@1%FPR 0.736
+rule: flag after 4 consecutive windows >= 1.0000 | val FPR clean 0.007, call 0.007, pooled 0.007 | val TPR pooled 0.791
+    test_set dataset  n_real  n_fake   fpr   tpr  median_delay_windows
+       clean     all     395    1223 0.005 0.679                   4.0
+       clean celebdf     178     340 0.011 0.912                   4.0
+       clean    dfdc      77     323 0.000 0.186                   4.0
+       clean    ffpp     140     560 0.000 0.821                   4.0
+call quality     all     395    1223 0.000 0.555                   4.0
+call quality celebdf     178     340 0.000 0.821                   4.0
+call quality    dfdc      77     323 0.000 0.121                   4.0
+call quality    ffpp     140     560 0.000 0.645                   4.0
+video AUC by aggregator
+aggregator                                                                lstm   mean  topk-5  transformer
+input   frame_run                                  dataset test_set                                       
+no-mask vit_b16_full_no-mask_ffpp+celebdf_sbi-none celebdf call quality  0.992  0.992   0.993        0.992
+                                                           clean         0.995  0.995   0.996        0.995
+                                                   dfdc    call quality  0.889  0.894   0.890        0.887
+                                                           clean         0.896  0.907   0.900        0.896
+                                                   ffpp    call quality  0.958  0.959   0.958        0.964
+                                                           clean         0.985  0.985   0.984        0.986
+
+full table (24 rows): /home/ubuntu/data/runs/temporal/comparison.csv

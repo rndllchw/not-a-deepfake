@@ -1,0 +1,40 @@
+{
+  "aggregator": "topk-5",
+  "run": "vit_b16_full_no-mask_ffpp+celebdf_sbi-none",
+  "split": "val",
+  "call_quality": false,
+  "video_how": "mean",
+  "celebdf": {
+    "window_n": 2635,
+    "window_auc": 0.996426745844841,
+    "window_acc": 0.9461100569259963,
+    "window_f1": 0.96126568466994,
+    "window_tpr_at_fpr": 0.9151103565365025,
+    "video_n": 443,
+    "video_auc": 0.9981781283151147,
+    "video_acc": 0.963882618510158,
+    "video_f1": 0.9737704918032787,
+    "video_tpr_at_fpr": 0.9663299663299664,
+    "video_auc_per_method": {
+      "Celeb-synthesis": 0.9981781283151147
+    }
+  },
+  "ffpp": {
+    "window_n": 4199,
+    "window_auc": 0.9781780291753498,
+    "window_acc": 0.9306977851869492,
+    "window_f1": 0.9574872169466764,
+    "window_tpr_at_fpr": 0.8112533492110747,
+    "video_n": 700,
+    "video_auc": 0.9815051020408163,
+    "video_acc": 0.9328571428571428,
+    "video_f1": 0.9588801399825022,
+    "video_tpr_at_fpr": 0.8589285714285714,
+    "video_auc_per_method": {
+      "Deepfakes": 0.9968367346938776,
+      "Face2Face": 0.9850510204081632,
+      "FaceSwap": 0.9950510204081633,
+      "NeuralTextures": 0.9490816326530612
+    }
+  }
+}

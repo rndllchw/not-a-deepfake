@@ -5,6 +5,7 @@ Decision rule (Step 6): flag a call when the window score stays at or above a th
 Chooses the threshold and N on val (clean and call quality together) to catch the most fakes with FPR <= --max-fpr
 (1%) on each and on both pooled, then scores test once. Writes decision.json and decision_test.csv (FPR, TPR,
 detection delay in windows). "Consecutive" means consecutive window numbers, not adjacent frames.
+On test, videos in src.exclusions (DFDC audio-only fakes) are left out; <dataset>_unfiltered rows have them.
 """
 
 import argparse
@@ -15,7 +16,8 @@ import numpy as np
 import pandas as pd
 from numpy.lib.stride_tricks import sliding_window_view
 
-from src.temporal.windows import read_windows, split_name, windows_path
+from src.exclusions import drop_excluded, excluded_videos, metric_parts
+from src.temporal.windows import data_root_of, read_windows, split_name, windows_path
 
 ABOVE_ALL_SCORES = 1.0 + 1e-6  # a threshold that nothing reaches: scores are probabilities, at most 1
 
@@ -81,16 +83,18 @@ def flag_delay(scores: np.ndarray, threshold: float, n: int) -> int | None:
     return int(np.argmax(ok)) + n if ok.any() else None
 
 
-def apply_rule(windows: pd.DataFrame, threshold: float, n: int) -> pd.DataFrame:
-    """FPR, TPR and median detection delay of a rule, per dataset and over all of them."""
+def apply_rule(windows: pd.DataFrame, threshold: float, n: int, excluded: set[str] = frozenset()) -> pd.DataFrame:
+    """FPR, TPR and median detection delay of a rule, per dataset and over all of them, without the
+    excluded videos; plus <dataset>_unfiltered for each dataset that had some (see src.exclusions)."""
     videos = []
     for video_id, g in windows.sort_values(["video_id", "window"]).groupby("video_id"):
         delay = flag_delay(g["score"].to_numpy(), threshold, n)
-        videos.append(dict(label=g["label"].iloc[0], dataset=g["dataset"].iloc[0],
+        videos.append(dict(video_id=video_id, label=g["label"].iloc[0], dataset=g["dataset"].iloc[0],
                            flagged=delay is not None, delay=delay if delay is not None else np.nan))
     videos = pd.DataFrame(videos)
+    parts = [("all", drop_excluded(videos, excluded))] + list(metric_parts(videos, excluded))
     rows = []
-    for dataset, part in [("all", videos)] + list(videos.groupby("dataset")):
+    for dataset, part in parts:
         real, fake = part[part["label"] == 0], part[part["label"] == 1]
         rows.append(dict(dataset=dataset, n_real=len(real), n_fake=len(fake),
                          fpr=real["flagged"].mean() if len(real) else np.nan,
@@ -123,11 +127,11 @@ def main() -> None:
           + ", ".join(f"{k} {v:.3f}" for k, v in rule["val_fpr"].items())
           + f" | val TPR pooled {rule['val_tpr_pooled']:.3f}")
 
-    tables = []
+    tables, excluded = [], excluded_videos(data_root_of(agg_dir))
     for call_quality in (False, True):
         name = split_name("test", call_quality)
         if windows_path(agg_dir, name).exists():
-            result = apply_rule(read_windows(windows_path(agg_dir, name)), rule["threshold"], rule["n"])
+            result = apply_rule(read_windows(windows_path(agg_dir, name)), rule["threshold"], rule["n"], excluded)
             tables.append(result.assign(test_set="call quality" if call_quality else "clean"))
     if tables:
         test = pd.concat(tables)[["test_set", "dataset", "n_real", "n_fake", "fpr", "tpr", "median_delay_windows"]]

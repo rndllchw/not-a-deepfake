@@ -16,7 +16,8 @@ Writes to {out} (default {data_root}/analysis/frames):
     thresholds.csv       accuracy, TPR and FPR at 0.5, at the val threshold of the decision rule (lowest with
                          val FPR <= --max-fpr, 1%), and at each test set's best threshold
     dfdc_hard_videos.csv every DFDC video's score per model and how many models get it wrong at 0.5
-A video's score is the mean of its frame probabilities, as in src.metrics.
+A video's score is the mean of its frame probabilities, as in src.metrics. Videos in src.exclusions
+(DFDC audio-only fakes) are left out; the unfiltered numbers are in the comparison tables.
 """
 
 import argparse
@@ -30,6 +31,8 @@ import numpy as np
 import pandas as pd
 from matplotlib.colors import LinearSegmentedColormap
 from sklearn.metrics import roc_auc_score
+
+from src.exclusions import excluded_videos
 
 # run folder under runs/frames -> display name; the order fixes each model's colour in every figure
 RUNS = {
@@ -67,13 +70,15 @@ def video_scores(path: Path) -> pd.DataFrame:
                                           label=("label", "first"), prob=("prob", "mean"))
 
 
-def load_all(runs_dir: Path, name: str) -> dict:
-    """{display name: video scores} for one predictions file, for every run that has it."""
+def load_all(runs_dir: Path, name: str, excluded: set[str] = frozenset()) -> dict:
+    """{display name: video scores} for one predictions file, for every run that has it,
+    without the excluded videos."""
     out = {}
     for run, label in RUNS.items():
         path = runs_dir / run / "predictions" / f"{name}.csv"
         if path.exists():
-            out[label] = video_scores(path)
+            scores = video_scores(path)
+            out[label] = scores[~scores.index.isin(excluded)]
     return out
 
 
@@ -275,7 +280,8 @@ def main() -> None:
     runs_dir = data_root / "runs" / "frames"
     out = (args.out or data_root / "analysis" / "frames").expanduser()
     out.mkdir(parents=True, exist_ok=True)
-    test, test_call = load_all(runs_dir, "test"), load_all(runs_dir, "test_call")
+    excluded = excluded_videos(data_root)
+    test, test_call = load_all(runs_dir, "test", excluded), load_all(runs_dir, "test_call", excluded)
     if not test:
         raise SystemExit(f"no test predictions in {runs_dir}; run src.frames.train or src.frames.predict first")
     pd.set_option("display.width", 200)

@@ -25,6 +25,7 @@ Writes:
                                                largest patch), p9999 (99.99th percentile of the
                                                difference, grey levels), audio_only (True = leave out)
 Prints the fakes with the smallest patches, so the gap at the threshold can be checked by eye.
+Every metric then leaves the flagged fakes out (src.exclusions).
 """
 
 import argparse

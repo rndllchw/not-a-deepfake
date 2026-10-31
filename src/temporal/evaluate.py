@@ -4,6 +4,7 @@ Evaluates an aggregator (Step 5): window and video metrics from its window-score
 
 A video's score is the mean of its window scores (--video-how max: the highest). Writes {name}_metrics.json
 next to each table: AUC, accuracy, F1 and TPR at low FPR per dataset, video AUC per fake method, ms per window.
+Videos in src.exclusions (DFDC audio-only fakes) are left out of the metrics; <dataset>_unfiltered has them.
 """
 
 import argparse
@@ -12,8 +13,9 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.exclusions import excluded_videos, metric_parts
 from src.metrics import binary_metrics
-from src.temporal.windows import available_names, read_windows, video_table, windows_path
+from src.temporal.windows import available_names, data_root_of, read_windows, video_table, windows_path
 
 
 def method_aucs(videos: pd.DataFrame) -> dict:
@@ -26,10 +28,11 @@ def method_aucs(videos: pd.DataFrame) -> dict:
     return out
 
 
-def evaluate(windows: pd.DataFrame, video_how: str = "mean") -> dict:
-    """Metrics per dataset: window_* over windows, video_* over videos, keys as in src.frames.predict."""
+def evaluate(windows: pd.DataFrame, video_how: str = "mean", excluded: set[str] = frozenset()) -> dict:
+    """Metrics per dataset: window_* over windows, video_* over videos, keys as in src.frames.predict.
+    The excluded videos are left out (see src.exclusions)."""
     out = {}
-    for dataset, part in windows.groupby("dataset"):
+    for dataset, part in metric_parts(windows, excluded):
         videos = video_table(part, video_how)
         m = {f"window_{k}": v for k, v in binary_metrics(part["label"], part["score"]).items()}
         m.update({f"video_{k}": v for k, v in binary_metrics(videos["label"], videos["score"]).items()})
@@ -51,12 +54,13 @@ def main() -> None:
         raise SystemExit(f"no window-score tables in {agg_dir / 'predictions'}")
     timing_file = agg_dir / "timing.json"
     timing = json.loads(timing_file.read_text()) if timing_file.exists() else {}
+    excluded = excluded_videos(data_root_of(agg_dir))
 
     for name in names:
         windows = read_windows(windows_path(agg_dir, name))
         results = dict(aggregator=agg_dir.name, run=agg_dir.parent.name, split=name.split("_")[0],
                        call_quality=name.endswith("_call"), video_how=args.video_how, **timing)
-        results.update(evaluate(windows, args.video_how))
+        results.update(evaluate(windows, args.video_how, excluded))
         (agg_dir / "predictions" / f"{name}_metrics.json").write_text(json.dumps(results, indent=2))
         for dataset, m in results.items():
             if isinstance(m, dict):

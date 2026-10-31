@@ -28,6 +28,12 @@ def temporal_dir(frame_run: Path, aggregator: str) -> Path:
     return frame_run.parents[2] / "temporal" / frame_run.parent.name / frame_run.name / aggregator
 
 
+def data_root_of(agg_dir: Path) -> Path:
+    """The data root an aggregator folder sits in."""
+    # agg_dir = {data_root}/runs/temporal/<mask setting>/<run>/<aggregator>
+    return agg_dir.parents[4]
+
+
 def frame_run_of(agg_dir: Path) -> Path:
     """The frame run an aggregator folder was built on (the inverse of temporal_dir)."""
     # agg_dir = runs/temporal/<mask setting>/<run>/<aggregator>

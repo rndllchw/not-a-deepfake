@@ -17,7 +17,9 @@ Writes to {run}/predictions/, where <name> is the split, plus _call with --call-
     <name>.csv           one row per frame: video_id, dataset, method, label, split, window, frame, prob
     <name>_features.npy  (--features) float16, one feature vector per csv row, same order
     <name>_metrics.json  frame and video metrics per dataset, video AUC per fake method,
-                         and inference time
+                         and inference time. Videos in src.exclusions (DFDC audio-only fakes) are
+                         left out of the metrics; <dataset>_unfiltered has them. To recompute these
+                         files from the saved scores without a GPU, use src.frames.rescore
 """
 
 import argparse
@@ -26,13 +28,13 @@ import time
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
+from src.exclusions import excluded_videos
 from src.frames.backbones import FrameClassifier
 from src.frames.dataset import FaceFrames, load_frames
-from src.metrics import binary_metrics, frame_and_video_metrics, video_scores
+from src.frames.rescore import dataset_metrics, print_metrics
 
 
 def load_model(checkpoint: Path, device: str) -> tuple[FrameClassifier, dict]:
@@ -81,16 +83,6 @@ def single_frame_ms(model: FrameClassifier, device: str, repeats: int = 100) -> 
     return 1000 * (time.perf_counter() - start) / repeats
 
 
-def method_aucs(videos: pd.DataFrame) -> dict:
-    """Video-level AUC of each fake method against all real videos of the same dataset."""
-    real = videos[videos["label"] == 0]
-    out = {}
-    for method, fakes in videos[videos["label"] == 1].groupby("method"):
-        both = pd.concat([real, fakes])
-        out[method] = binary_metrics(both["label"], both["prob"]).get("auc")
-    return out
-
-
 def score_run(run: Path, data_root: Path, split: str = "test", datasets: list[str] | None = None,
               call_quality: bool = False, features: bool = False, checkpoint: str = "best.pt",
               batch_size: int = 64, workers: int = 4) -> dict:
@@ -121,20 +113,12 @@ def score_run(run: Path, data_root: Path, split: str = "test", datasets: list[st
     frames[columns].to_csv(out_dir / f"{name}.csv", index=False)
 
     results = dict(run=run.name, backbone=train_args["backbone"], mask=mask, split=split, call_quality=call_quality)
-    for dataset_name, part in frames.groupby("dataset"):
-        results[dataset_name] = frame_and_video_metrics(part)
-        results[dataset_name]["video_auc_per_method"] = method_aucs(video_scores(part))
+    results.update(dataset_metrics(frames, excluded_videos(data_root)))
     results["ms_per_frame_batched"] = batched_ms
     results["ms_per_frame_single"] = single_frame_ms(model, device)
     (out_dir / f"{name}_metrics.json").write_text(json.dumps(results, indent=2))
 
-    for dataset_name, m in results.items():
-        if isinstance(m, dict):
-            print(f"{dataset_name}: frame AUC {m.get('frame_auc', float('nan')):.3f} | video AUC "
-                  f"{m.get('video_auc', float('nan')):.3f}, EER {m.get('video_eer', float('nan')):.3f}, "
-                  f"acc {m.get('video_acc', float('nan')):.3f}, "
-                  f"TPR@1%FPR {m.get('video_tpr_at_fpr', float('nan')):.3f} | per method "
-                  + ", ".join(f"{k} {v:.3f}" for k, v in m["video_auc_per_method"].items() if v is not None))
+    print_metrics(results)
     print(f"{batched_ms:.2f} ms/frame batched, {results['ms_per_frame_single']:.2f} ms/frame one at a time")
     print(f"wrote {out_dir / name}*")
     return results

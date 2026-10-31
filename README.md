@@ -108,6 +108,26 @@ backgrounds instead of detecting manipulation.
   real video a fake was made from, kept in `source_ids`) or a `labels.csv`
   (`filename,label`, 1 = fake). Videos with no label are left out, with a warning.
 
+**Audio-only DFDC fakes.** Some DFDC fakes change only the audio; their frames
+are their original's, so a model that sees frames cannot detect them. After
+`build_index`, run on the GPU machine (CPU only, a few minutes):
+
+```
+python -m src.preprocessing.dfdc_audio_only --data-root ~/data
+```
+
+It compares each fake with its `original` at full resolution and flags it when
+no patch of the frame changes beyond re-encoding noise (largest changed patch
+under 0.0001 of the frame). Flags are written to `processed/dfdc_audio_only.csv`.
+Only fakes whose original is in the index can be checked: in the Kaggle sample,
+58 of 323. 5 of them are flagged, all made from one original (`atvmxvwyns`), with
+a clear gap to the rest; the other 265 fakes are kept unchecked. Flagged fakes are
+still scored, but every metric leaves them out (`src/exclusions.py`), and each
+table also has a `dfdc_unfiltered` row with them. After the list changes,
+`python -m src.frames.rescore` recomputes the frame runs' metrics from the saved
+scores (no GPU); rerun `src.temporal.evaluate` and `src.temporal.decision` for
+the temporal ones.
+
 | | train | val | test |
 |---|---|---|---|
 | FaceForensics++ | ✓ | ✓ | ✓ in-domain |
@@ -310,6 +330,8 @@ Runs are saved by input setting:
 
 If the machine stops mid-run, rerun the same command with `--resume`. To score
 again or score other splits, use `python -m src.frames.predict --run <run folder>`.
+To recompute the metrics from the saved scores only (no GPU, e.g. on a laptop),
+use `python -m src.frames.rescore`.
 Features for the temporal models are saved with `scripts/export_features.sh`
 (see [Temporal models](#temporal-models)).
 

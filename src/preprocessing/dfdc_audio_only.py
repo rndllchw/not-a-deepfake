@@ -1,15 +1,17 @@
 """
-Finds DFDC fakes whose video is (near-)identical to their original: fakes made by
-changing only the audio. Our models see frames only, so these fakes cannot be
-detected and should be left out of the DFDC results.
+Finds DFDC fakes whose video is identical to their original apart from re-encoding
+noise: fakes made by changing only the audio. Our models see frames only, so these
+fakes cannot be detected and should be left out of the DFDC results.
 
 Each fake is compared with its `original` (from metadata.json, the index's
-source_ids) on every --step-th frame of the first --max-frames. Frames are turned
-grey, shrunk to --width pixels wide and blurred, so re-encoding noise mostly
-disappears; a pixel counts as changed if it differs by more than --pixel-threshold
-grey levels. A face swap changes the face region (around 1% of the frame) in every
-frame; an audio-only fake changes nothing. A fake is flagged when even its most
-changed frame has under --threshold of its pixels changed.
+source_ids) on every --step-th frame of the first --max-frames, at full resolution
+and in grey. The pixel difference is smoothed (Gaussian, --sigma) so single noisy
+pixels drop out, and the connected patches where it exceeds --pixel-threshold grey
+levels are found. A face swap leaves a face-sized patch (on the Kaggle sample, at
+least 0.00025 of the frame, usually 0.001-0.03); re-encoding noise leaves nothing or
+specks of a few pixels (at most 0.000024). A fake is flagged when its largest patch,
+over all compared frames, is under --threshold of the frame. Fakes with any real
+visual change are kept, since a visual model could in principle detect them.
 
 Fakes whose original is not in the index (the Kaggle sample has only some of them)
 cannot be checked; they are listed with status "no_original" and kept.
@@ -19,10 +21,10 @@ Run on the GPU machine from the repo root (CPU only, a few minutes):
 
 Writes:
     {data_root}/processed/dfdc_audio_only.csv  one row per DFDC fake: video_id, source_id, status,
-                                               frames, changed_max, changed_median, absdiff_median,
-                                               audio_only (True = leave out)
-Prints the spread of changed_max, so the threshold can be checked by eye: the
-audio-only fakes should sit apart, near 0.
+                                               frames, largest_patch, patch_box (x, y, w, h of the
+                                               largest patch), p9999 (99.99th percentile of the
+                                               difference, grey levels), audio_only (True = leave out)
+Prints the fakes with the smallest patches, so the gap at the threshold can be checked by eye.
 """
 
 import argparse
@@ -42,8 +44,8 @@ def resolve(path: str, data_root: Path) -> str:
     return str(data_root.joinpath(*p.parts[p.parts.index("raw"):]))
 
 
-def read_frames(path: str, max_frames: int, step: int, width: int) -> list[np.ndarray]:
-    """Every step-th of the first max_frames frames, grey, shrunk to width pixels and blurred."""
+def read_frames(path: str, max_frames: int, step: int) -> list[np.ndarray]:
+    """Every step-th of the first max_frames frames, grey, full resolution."""
     cap = cv2.VideoCapture(path)
     frames, i = [], 0
     while i < max_frames and cap.grab():
@@ -51,13 +53,20 @@ def read_frames(path: str, max_frames: int, step: int, width: int) -> list[np.nd
             ok, frame = cap.retrieve()
             if not ok:
                 break
-            grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            height = round(grey.shape[0] * width / grey.shape[1])
-            frames.append(cv2.GaussianBlur(cv2.resize(grey, (width, height), interpolation=cv2.INTER_AREA),
-                                           (5, 5), 0))
+            frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
         i += 1
     cap.release()
     return frames
+
+
+def largest_patch(diff: np.ndarray, sigma: float, pixel_threshold: float) -> tuple[float, tuple | None]:
+    """Share of the frame covered by the largest connected patch of change, and its box (x, y, w, h)."""
+    mask = (cv2.GaussianBlur(diff, (0, 0), sigma) > pixel_threshold).astype(np.uint8)
+    n, _, stats, _ = cv2.connectedComponentsWithStats(mask)
+    if n == 1:  # background only
+        return 0.0, None
+    k = 1 + int(stats[1:, cv2.CC_STAT_AREA].argmax())
+    return float(stats[k, cv2.CC_STAT_AREA] / diff.size), tuple(int(v) for v in stats[k, :4])
 
 
 def compare_group(job: tuple[str, str, list[tuple[str, str]], argparse.Namespace]) -> list[dict]:
@@ -65,27 +74,28 @@ def compare_group(job: tuple[str, str, list[tuple[str, str]], argparse.Namespace
     source_id, source_path, fakes, args = job
     cv2.setNumThreads(1)
     try:
-        original = read_frames(source_path, args.max_frames, args.step, args.width)
+        original = read_frames(source_path, args.max_frames, args.step)
     except Exception as e:  # noqa: BLE001 - one bad file should not stop the run
         return [dict(video_id=v, source_id=source_id, status="error", message=f"original: {e}") for v, _ in fakes]
     rows = []
     for video_id, path in fakes:
         try:
-            fake = read_frames(path, args.max_frames, args.step, args.width)
+            fake = read_frames(path, args.max_frames, args.step)
             n = min(len(fake), len(original))
             if n == 0:
                 rows.append(dict(video_id=video_id, source_id=source_id, status="error", message="no frames"))
                 continue
-            changed, absdiff = [], []
+            best, box, p9999 = -1.0, None, 0.0
             for a, b in zip(fake[:n], original[:n]):
                 if a.shape != b.shape:
                     a = cv2.resize(a, (b.shape[1], b.shape[0]), interpolation=cv2.INTER_AREA)
-                d = cv2.absdiff(a, b)
-                changed.append(float((d > args.pixel_threshold).mean()))
-                absdiff.append(float(d.mean()))
+                diff = cv2.absdiff(a, b)
+                p9999 = max(p9999, float(np.percentile(diff, 99.99)))
+                share, patch_box = largest_patch(diff, args.sigma, args.pixel_threshold)
+                if share > best:
+                    best, box = share, patch_box
             rows.append(dict(video_id=video_id, source_id=source_id, status="compared", frames=n,
-                             changed_max=max(changed), changed_median=float(np.median(changed)),
-                             absdiff_median=float(np.median(absdiff))))
+                             largest_patch=best, patch_box=box, p9999=p9999))
         except Exception as e:  # noqa: BLE001
             rows.append(dict(video_id=video_id, source_id=source_id, status="error", message=str(e)))
     return rows
@@ -98,11 +108,12 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=None,
                         help="default: {data_root}/processed/dfdc_audio_only.csv")
     parser.add_argument("--max-frames", type=int, default=300, help="compare within the first N frames")
-    parser.add_argument("--step", type=int, default=10, help="compare every N-th frame")
-    parser.add_argument("--width", type=int, default=480, help="frames are shrunk to this width first")
-    parser.add_argument("--pixel-threshold", type=int, default=25, help="grey levels for a pixel to count as changed")
-    parser.add_argument("--threshold", type=float, default=0.001,
-                        help="flag a fake when its most changed frame has under this share of pixels changed")
+    parser.add_argument("--step", type=int, default=30, help="compare every N-th frame")
+    parser.add_argument("--sigma", type=float, default=3.0, help="Gaussian smoothing of the difference, pixels")
+    parser.add_argument("--pixel-threshold", type=float, default=6.0,
+                        help="smoothed difference (grey levels) above which a pixel counts as changed")
+    parser.add_argument("--threshold", type=float, default=0.0001,
+                        help="flag a fake when its largest patch of change is under this share of the frame")
     parser.add_argument("--workers", type=int, default=2)
     args = parser.parse_args()
 
@@ -129,23 +140,20 @@ def main() -> None:
                 print(f"{i}/{len(jobs)} originals done", flush=True)
 
     out = pd.DataFrame(rows).sort_values("video_id").reset_index(drop=True)
-    out["audio_only"] = (out["status"] == "compared") & (out["changed_max"] < args.threshold)
+    out["audio_only"] = (out["status"] == "compared") & (out["largest_patch"] < args.threshold)
     path = args.out or data_root / "processed" / "dfdc_audio_only.csv"
     out.to_csv(path, index=False)
 
     print("\n" + out["status"].value_counts().to_string())
     for _, r in out[out["status"] == "error"].iterrows():
         print(f"error {r['video_id']}: {r['message']}")
-    compared = out[out["status"] == "compared"]
+    compared = out[out["status"] == "compared"].sort_values("largest_patch")
     if len(compared):
-        print("\nchanged_max (share of pixels changed in the most changed frame), compared fakes:")
-        print(compared["changed_max"].describe(percentiles=[0.01, 0.05, 0.1, 0.25, 0.5]).to_string())
-        for t in (0.0001, 0.0005, 0.001, 0.002, 0.005, 0.01):
-            print(f"  under {t:<6}: {(compared['changed_max'] < t).sum()}")
-        print("\nlowest 15:")
-        print(compared.nsmallest(15, "changed_max")[["video_id", "source_id", "frames", "changed_max",
-                                                     "changed_median", "absdiff_median"]].to_string(index=False))
-    print(f"\n{int(out['audio_only'].sum())} fakes flagged audio-only (changed_max < {args.threshold}); wrote {path}")
+        print(f"\nsmallest patches of change (share of the frame); flagged below {args.threshold}:")
+        print(compared.head(12)[["video_id", "source_id", "largest_patch", "p9999", "patch_box", "audio_only"]]
+              .to_string(index=False, float_format=lambda v: f"{v:.6f}"))
+    print(f"\n{int(out['audio_only'].sum())} of {len(compared)} checked fakes flagged audio-only "
+          f"({len(out) - len(compared)} not checked); wrote {path}")
 
 
 if __name__ == "__main__":
